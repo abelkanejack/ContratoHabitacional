@@ -1,0 +1,203 @@
+// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.8.0;
+
+ 
+
+contract ContratoHabitacional {
+
+    address payable Banco;
+
+    address comprador;
+
+   
+
+    constructor (){
+
+         Banco = payable(msg.sender);
+
+    }
+
+   
+
+    modifier apenasBanco () {
+
+        require(msg.sender == Banco);
+
+        _;
+
+    }
+
+   
+
+    struct Imovel {
+
+        address dono;
+
+        string endereco;
+
+        uint cartorio;
+
+        uint256 valorRestante;
+
+        uint256 entrada;
+
+        uint256 prazo;
+
+        uint256 parcela;
+
+        bool aVenda;
+
+    }
+
+   
+
+    mapping(string => Imovel) public matriculaImovel;
+
+    mapping(string => bool) matriculaExiste;
+
+    string[] listaDeImoveis;
+
+ 
+
+    event ImovelAvenda(string matricula, uint cartorio, uint256 preco);
+
+    event ImovelComprado(string matricula, address novoOwner, uint256 valorEntrada);
+
+   
+
+    function incluirImovel(uint256 preco, uint256 entrada, uint256 prazo, string memory matricula, string memory endereco, uint cartorio) public apenasBanco {
+
+        require(!matriculaExiste[matricula], "Matricula ja cadastrada");
+
+       
+
+        matriculaImovel[matricula] = Imovel({
+
+            dono: msg.sender,
+
+            endereco: endereco,
+
+            cartorio: cartorio,
+
+            valorRestante: preco,
+
+            entrada: entrada,
+
+            prazo: prazo,
+
+            parcela: (preco - entrada)/prazo,
+
+            aVenda: true                      
+
+        });
+
+ 
+
+        listaDeImoveis.push(matricula);
+
+        matriculaExiste[matricula] = true;
+
+       
+
+        emit ImovelAvenda(matricula, cartorio, preco);
+
+    }
+
+   
+
+    function comprarImovel(string memory matricula, uint256 entrada) public payable {
+
+        require(matriculaImovel[matricula].aVenda, "Imovel nao esta a venda");
+
+        require(msg.value == entrada, "Valor incorreto");
+
+        require(matriculaImovel[matricula].entrada == entrada, "Nao e o valor da entrada");
+
+        require(entrada <= matriculaImovel[matricula].valorRestante, "Valor da entrada maior do que o valor do imovel");
+
+                       
+
+        Banco.transfer(entrada);
+
+        matriculaImovel[matricula].valorRestante -= entrada;
+
+        comprador = msg.sender;
+
+        matriculaImovel[matricula].entrada = 0;
+
+        matriculaImovel[matricula].aVenda = false;              
+
+         
+
+        emit ImovelComprado(matricula, msg.sender, entrada);
+
+    }
+
+ 
+
+    function pagarParcelas(string memory matricula, uint256 valorParcela) public payable {
+
+        require(msg.value == valorParcela, "Valor incorreto");
+
+        require(matriculaImovel[matricula].parcela == valorParcela, "Nao e o valor da parcela");
+
+        require(msg.sender == comprador);
+
+        require(matriculaImovel[matricula].parcela == valorParcela);
+
+        Banco.transfer(valorParcela);
+
+        matriculaImovel[matricula].valorRestante -= valorParcela;
+
+        matriculaImovel[matricula].prazo --;
+
+       
+
+       
+
+        if (matriculaImovel[matricula].valorRestante == 0) {
+
+           matriculaImovel[matricula].dono = comprador;
+
+        }
+
+    }
+
+ 
+
+    function venderNovamente(uint256 preco, uint256 entrada, uint256 prazo, string memory matricula, uint cartorio) public apenasBanco {
+
+        matriculaImovel[matricula].dono = msg.sender;
+
+        matriculaImovel[matricula].valorRestante = preco;
+
+        matriculaImovel[matricula].entrada = entrada;
+
+        matriculaImovel[matricula].prazo = prazo;
+
+        matriculaImovel[matricula].parcela = (preco - entrada)/prazo;
+
+        matriculaImovel[matricula].aVenda = true;
+
+        matriculaExiste[matricula] = true;
+
+       
+
+        emit ImovelAvenda(matricula, cartorio, preco);
+
+    }
+
+     
+
+    receive() external payable {}
+
+ 
+
+    function listarTodosImoveis() public view returns (string[] memory) {
+
+        return listaDeImoveis;
+
+    }
+
+}
